@@ -1,2 +1,3 @@
 # stock_crawl
- Stock data web crawler
+ Python package for crawling stock data.  
+ This is for personal usage only.
