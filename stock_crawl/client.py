@@ -40,7 +40,7 @@ def cache_decorator(func):
         result = await func(self, *args, **kwargs)
         self.cache[key] = result
         logging.debug(f"Cached {key}")
-        self.__save_cache()
+        self.save_cache()
         return result
 
     return wrapper
@@ -76,18 +76,18 @@ class StockCrawl:
             connector=aiohttp.TCPConnector(verify_ssl=False),
         )
 
-    def __load_cache(self) -> None:
+    def _load_cache(self) -> None:
         if not os.path.exists(CACHE_DIR):
             with open(CACHE_DIR, "wb") as f:
                 pickle.dump({}, f)
         with open(CACHE_DIR, "rb") as f:
             self.cache = pickle.load(f)
 
-    def __save_cache(self) -> None:
+    def save_cache(self) -> None:
         with open(CACHE_DIR, "wb") as f:
             pickle.dump(self.cache, f)
 
-    def __delete_old_cache(self) -> None:
+    def _delete_old_cache(self) -> None:
         recent_three_days = [
             str(self.today - datetime.timedelta(days=i)) for i in range(3)
         ]
@@ -95,7 +95,7 @@ class StockCrawl:
             if not any((day in key for day in recent_three_days)):
                 del self.cache[key]
         logging.debug(f"Cache size: {len(self.cache)}")
-        self.__save_cache()
+        self.save_cache()
 
     async def set_today(self) -> None:
         today = get_today()
@@ -107,7 +107,7 @@ class StockCrawl:
 
     async def start(self) -> None:
         if self.use_cache:
-            self.__load_cache()
+            self._load_cache()
 
         logging.debug("Initializing Tortoise ORM")
         await Tortoise.init(
@@ -117,7 +117,7 @@ class StockCrawl:
         await Tortoise.generate_schemas()
 
         await self.set_today()
-        self.__delete_old_cache()
+        self._delete_old_cache()
 
     async def close(self) -> None:
         await Tortoise.close_connections()
