@@ -2,7 +2,6 @@ import datetime
 from typing import List
 
 from bs4 import Tag
-from pandas import Series
 from pydantic import BaseModel, validator
 
 from ..utils import roc_to_western_date, str_to_float
