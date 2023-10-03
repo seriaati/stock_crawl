@@ -111,7 +111,7 @@ class StockCrawl:
 
         logging.debug("Initializing Tortoise ORM")
         await Tortoise.init(
-            db_url="sqlite://db.sqlite3",
+            db_url="sqlite://stock_crawl.sqlite3",
             modules={"models": ["stock_crawl.models.database"]},
         )
         await Tortoise.generate_schemas()
