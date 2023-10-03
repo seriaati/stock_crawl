@@ -1,5 +1,8 @@
 import datetime
-from typing import List
+from typing import List, Sequence
+
+from tortoise.exceptions import IntegrityError
+from tortoise.models import Model as TortoiseModel
 
 from .models.database import HistoryTrade
 
@@ -36,3 +39,15 @@ async def get_trade_days() -> List[datetime.date]:
 
 async def is_in_trade_days(date: datetime.date) -> bool:
     return date in await get_trade_days()
+
+
+async def update_or_create(obj: TortoiseModel) -> None:
+    try:
+        await obj.save()
+    except IntegrityError:
+        pass
+
+
+async def bulk_update_or_create(objs: Sequence[TortoiseModel]) -> None:
+    for obj in objs:
+        await update_or_create(obj)

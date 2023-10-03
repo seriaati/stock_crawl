@@ -8,7 +8,6 @@ from tortoise.models import Model
 class HistoryTrade(Model):
     date = fields.DateField()
     stock_id = fields.CharField(max_length=10)
-    stock_name = fields.CharField(max_length=10)
 
     total_volume = fields.IntField()
     total_value = fields.IntField()
@@ -25,13 +24,13 @@ class HistoryTrade(Model):
     def parse_from_series(cls, series: pandas.Series) -> typing.Self:
         return cls(
             date=series["date"],
-            id=series["stock_id"],
+            stock_id=series["stock_id"],
             total_volume=series["Trading_Volume"],
-            total_money=series["Trading_money"],
-            opening_price=series["open"],
-            highest_price=series["max"],
-            lowest_price=series["min"],
-            closing_price=series["close"],
+            total_value=series["Trading_money"],
+            open_price=series["open"],
+            high_price=series["max"],
+            low_price=series["min"],
+            close_price=series["close"],
         )
 
 

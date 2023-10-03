@@ -10,13 +10,21 @@ from typing import Any, DefaultDict, Dict, List
 
 import aiohttp
 from bs4 import BeautifulSoup
-from FinMind.data import DataLoader
+from FinMind.data import DataLoader as FinMindDataLoader
+from tortoise import Tortoise
+from tortoise.exceptions import IntegrityError
 
 from .api_urls import *
 from .constants import RANDOM_HEADERS, RANDOM_USER_AGENTS
 from .enums import RecentDay
-from .models import BuySell, HistoryTrade, MainForce, News, PunishStock
-from .utils import get_today, get_trade_days, roc_to_western_date
+from .models import BuySell, HistoryTrade, MainForce, News, PunishStock, Stock
+from .utils import (
+    bulk_update_or_create,
+    get_today,
+    get_trade_days,
+    roc_to_western_date,
+    update_or_create,
+)
 
 CACHE_DIR = "cache.pkl"
 
@@ -26,13 +34,13 @@ def cache_decorator(func):
         if not hasattr(self, "today"):
             return await func(self, *args, **kwargs)
         key = f"{func.__name__}_{args}_{kwargs}_{self.today}"
-        if key in self.cache and self.use_cache:
+        if key in self.cache:
             logging.debug(f"Using cache for {key}")
             return self.cache[key]
         result = await func(self, *args, **kwargs)
         self.cache[key] = result
         logging.debug(f"Cached {key}")
-        self._save_cache()
+        self.__save_cache()
         return result
 
     return wrapper
@@ -44,9 +52,7 @@ class StockCrawl:
         *,
         use_cache: bool = True,
     ) -> None:
-        self.id_name_map: Dict[str, str] = {}
-        """公司代號與公司名稱對應表"""
-        self.finmind = DataLoader()
+        self.finmind = FinMindDataLoader()
         """FinMind API"""
         self.use_cache = use_cache
         """是否使用快取"""
@@ -70,14 +76,18 @@ class StockCrawl:
             connector=aiohttp.TCPConnector(verify_ssl=False),
         )
 
-    def _open_cache(self) -> None:
+    def __load_cache(self) -> None:
         if not os.path.exists(CACHE_DIR):
             with open(CACHE_DIR, "wb") as f:
                 pickle.dump({}, f)
         with open(CACHE_DIR, "rb") as f:
             self.cache = pickle.load(f)
 
-    def _delete_old_cache(self) -> None:
+    def __save_cache(self) -> None:
+        with open(CACHE_DIR, "wb") as f:
+            pickle.dump(self.cache, f)
+
+    def __delete_old_cache(self) -> None:
         recent_three_days = [
             str(self.today - datetime.timedelta(days=i)) for i in range(3)
         ]
@@ -85,24 +95,32 @@ class StockCrawl:
             if not any((day in key for day in recent_three_days)):
                 del self.cache[key]
         logging.debug(f"Cache size: {len(self.cache)}")
-        self._save_cache()
-
-    def _save_cache(self) -> None:
-        with open(CACHE_DIR, "wb") as f:
-            pickle.dump(self.cache, f)
+        self.__save_cache()
 
     async def set_today(self) -> None:
         today = get_today()
         day_trades = await self.fetch_history_trades(
-            "2330", today - datetime.timedelta(days=5), today
+            "2330", today - datetime.timedelta(days=5), today, use_db=False
         )
         self.today = day_trades[-1].date
         logging.debug(f"Today's date is: {self.today}")
 
     async def start(self) -> None:
-        self._open_cache()
+        if self.use_cache:
+            self.__load_cache()
+
+        logging.debug("Initializing Tortoise ORM")
+        await Tortoise.init(
+            db_url="sqlite://db.sqlite3",
+            modules={"models": ["stock_crawl.models.database"]},
+        )
+        await Tortoise.generate_schemas()
+
         await self.set_today()
-        self._delete_old_cache()
+        self.__delete_old_cache()
+
+    async def close(self) -> None:
+        await Tortoise.close_connections()
 
     async def fetch_stock_ids(self) -> List[str]:
         """
@@ -116,7 +134,7 @@ class StockCrawl:
                     if d["公司代號"].isdigit():
                         stock_id = d["公司代號"]
                         stock_ids.append(stock_id)
-                        self.id_name_map[stock_id] = d["公司簡稱"]
+                        await update_or_create(Stock(id=stock_id, name=d["公司簡稱"]))
 
             async with session.get(TPEX_IDS) as resp:  # 取得所有上櫃公司代號
                 data: List[Dict[str, str]] = await resp.json()
@@ -124,9 +142,22 @@ class StockCrawl:
                     if d["SecuritiesCompanyCode"].isdigit():
                         stock_id = d["SecuritiesCompanyCode"]
                         stock_ids.append(stock_id)
-                        self.id_name_map[stock_id] = d["CompanyName"]
+                        await update_or_create(
+                            Stock(id=stock_id, name=d["CompanyName"])
+                        )
 
         return stock_ids
+
+    @cache_decorator
+    async def get_stock_name(self, id: str) -> str:
+        """
+        取得股票名稱
+        """
+        stock = await Stock.get_or_none(id=id)
+        if stock is None:
+            await self.fetch_stock_ids()
+            stock = await Stock.get(id=id)
+        return stock.name
 
     @cache_decorator
     async def fetch_main_forces(
@@ -222,7 +253,7 @@ class StockCrawl:
         return {**twse_capital, **tpex_capital}
 
     async def fetch_history_trades(
-        self, id: str, start: datetime.date, end: datetime.date
+        self, id: str, start: datetime.date, end: datetime.date, *, use_db: bool = True
     ) -> List[HistoryTrade]:
         """
         從 FinMind API 取得上市上櫃公司的歷史交易資訊
@@ -235,23 +266,22 @@ class StockCrawl:
         回傳:
             List[HistoryTrade]: 歷史交易資訊
         """
-        logging.debug("Getting trade data from db")
+        if use_db:
+            logging.debug("Getting trade data from db")
+            # obtain histroy trades from db that is between start and end date and has the id id
+            db_trades = await HistoryTrade.filter(
+                date__gte=start, date__lte=end, stock_id=id
+            ).all()
 
-        # obtain histroy trades from db that is between start and end date and has the id id
-        db_trades = await HistoryTrade.filter(
-            date__gte=start, date__lte=end, stock_id=id
-        ).all()
-
-        # check if the trade data is complete
-        if len(db_trades) == len(await get_trade_days()):
-            logging.debug(f"Got {len(db_trades)} trade data from db")
-            return db_trades
+            # check if the trade data is complete
+            if len(db_trades) == len(await get_trade_days()):
+                logging.debug(f"Got {len(db_trades)} trade data from db")
+                return db_trades
 
         # not complete, fetch from FinMind
         logging.debug("Fetching trade data from FinMind")
         trades = await asyncio.to_thread(self._fetch_day_trades, id, start, end)
-        for t in trades:
-            await t.save()
+        await bulk_update_or_create(trades)
 
         logging.debug(f"Saved {len(trades)} trade data to db")
         return trades
