@@ -190,13 +190,13 @@ class StockCrawl:
             cells = row.find_all("td")
             if len(cells) == 10:
                 # 檢查第二個 <td> 是否為數字，如果不是數字，則跳過
-                if not cells[1].text.strip().isdigit():
+                if not cells[1].text.strip().replace(",", "").isdigit():
                     continue
 
                 cells_1 = cells[:5]
                 main_forces.append(MainForce.parse(cells_1, is_buy_force=True))
                 cells_2 = cells[5:]
-                if not cells_2[1].text.strip().isdigit():
+                if not cells_2[1].text.strip().replace(",", "").isdigit():
                     continue
                 main_forces.append(MainForce.parse(cells_2, is_buy_force=False))
 
