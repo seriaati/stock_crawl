@@ -2,7 +2,7 @@ import datetime
 from typing import List
 
 from bs4 import Tag
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 
 from ..utils import roc_to_western_date, str_to_float
 
@@ -113,11 +113,11 @@ class TradeLog(BaseModel):
     date: datetime.date
     """日期"""
 
-    @validator("is_buy", pre=True)
+    @field_validator("is_buy", mode="before")
     def _convert_is_buy(cls, v: int) -> bool:
         return bool(v)
 
-    @validator("date", pre=True)
+    @field_validator("date", mode="before")
     def _convert_date(cls, v: str) -> datetime.date:
         return datetime.datetime.strptime(v, "%Y-%m-%d").date()
 
@@ -139,7 +139,7 @@ class PunishStock(BaseModel):
     date: datetime.date
     """股票公告遭處置日期"""
 
-    @validator("date", pre=True)
+    @field_validator("date", mode="before")
     def _convert_date(cls, v: str) -> datetime.date:
         return roc_to_western_date(v)
 
