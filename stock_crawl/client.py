@@ -12,6 +12,8 @@ import aiohttp
 from bs4 import BeautifulSoup
 from FinMind.data import DataLoader as FinMindDataLoader
 from tortoise import Tortoise
+from tortoise.backends.base.client import BaseDBAsyncClient
+from tortoise.connection import connections
 
 from .constants import RANDOM_HEADERS, RANDOM_USER_AGENTS
 from .endpoints import *
@@ -59,6 +61,8 @@ class StockCrawl:
         """快取"""
         self.today: datetime.date
         """今天日期"""
+        self.conn: BaseDBAsyncClient
+        """資料庫"""
 
     @staticmethod
     def _generate_random_header() -> Dict[str, str]:
@@ -116,18 +120,27 @@ class StockCrawl:
         if self.use_cache:
             self._load_cache()
 
-        logging.debug("Initializing Tortoise ORM")
         await Tortoise.init(
-            db_url="sqlite://stock_crawl.sqlite3",
-            modules={"models": ["stock_crawl.models.database"]},
+            config={
+                "connections": {
+                    "stock_crawl": "sqlite://stock_crawl.sqlite3",
+                },
+                "apps": {
+                    "stock_crawl": {
+                        "models": ["stock_crawl.models.database"],
+                        "default_connection": "stock_crawl",
+                    }
+                },
+            },
         )
         await Tortoise.generate_schemas()
+        self.conn = connections.get("stock_crawl")
 
         await self.set_today()
         self._delete_old_cache()
 
     async def close(self) -> None:
-        await Tortoise.close_connections()
+        await self.conn.close()
 
     async def fetch_stock_ids(self) -> List[str]:
         """
@@ -141,7 +154,9 @@ class StockCrawl:
                     if d["公司代號"].isdigit():
                         stock_id = d["公司代號"]
                         stock_ids.append(stock_id)
-                        await update_or_create(Stock(id=stock_id, name=d["公司簡稱"]))
+                        await update_or_create(
+                            Stock(id=stock_id, name=d["公司簡稱"]), self.conn
+                        )
 
             async with session.get(TPEX_IDS) as resp:  # 取得所有上櫃公司代號
                 data: List[Dict[str, str]] = await resp.json()
@@ -150,7 +165,7 @@ class StockCrawl:
                         stock_id = d["SecuritiesCompanyCode"]
                         stock_ids.append(stock_id)
                         await update_or_create(
-                            Stock(id=stock_id, name=d["CompanyName"])
+                            Stock(id=stock_id, name=d["CompanyName"]), self.conn
                         )
 
         return stock_ids
@@ -160,10 +175,10 @@ class StockCrawl:
         """
         取得股票名稱
         """
-        stock = await Stock.get_or_none(id=id)
+        stock = await Stock.get_or_none(id=id, using_db=self.conn)
         if stock is None:
             await self.fetch_stock_ids()
-            stock = await Stock.get(id=id)
+            stock = await Stock.get(id=id, using_db=self.conn)
         return stock.name
 
     @cache_decorator
@@ -283,9 +298,11 @@ class StockCrawl:
         if use_db:
             logging.debug("Getting trade data from db")
             # obtain histroy trades from db that is between start and end date and has the id id
-            db_trades = await HistoryTrade.filter(
-                date__gte=start, date__lte=end, stock_id=id
-            ).all()
+            db_trades = (
+                await HistoryTrade.filter(date__gte=start, date__lte=end, stock_id=id)
+                .using_db(self.conn)
+                .all()
+            )
 
             # check if the trade data is complete
             if len(db_trades) == len(await get_trade_days()):
@@ -295,7 +312,7 @@ class StockCrawl:
         # not complete, fetch from FinMind
         logging.debug("Fetching trade data from FinMind")
         trades = await asyncio.to_thread(self._fetch_day_trades, id, start, end)
-        await bulk_update_or_create(trades)
+        await bulk_update_or_create(trades, self.conn)
 
         logging.debug(f"Saved {len(trades)} trade data to db")
         return trades
