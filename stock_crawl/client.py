@@ -217,7 +217,7 @@ class StockCrawl:
             async with session.get(url) as resp:
                 data = await resp.text(errors="replace")
 
-        soup = BeautifulSoup(data, "html.parser")
+        soup = BeautifulSoup(data, "lxml")
         rows = soup.find_all("tr")
         buy_sells: List[BuySell] = []
 
@@ -225,7 +225,7 @@ class StockCrawl:
             cells = row.find_all("td")
             if len(cells) == 5:
                 # 檢查第二個 <td> 是否為數字，如果不是數字，則跳過
-                if not cells[1].text.strip().isdigit():
+                if not cells[1].text.strip().replace(",", "").isdigit():
                     continue
                 buy_sells.append(BuySell.parse(cells))
 
@@ -334,7 +334,7 @@ class StockCrawl:
         async with self.session as session:
             async with session.get(MONEYDJ_STOCK_CATEGORY) as resp:
                 data = await resp.text(errors="replace")
-        soup = BeautifulSoup(data, "html.parser")
+        soup = BeautifulSoup(data, "lxml")
         tables = soup.find_all("table")
         trs = tables[0].find_all("tr")
         tds = trs[0].find_all("td", {"width": "25%"})
@@ -349,7 +349,7 @@ class StockCrawl:
             async with self.session as session:
                 async with session.get(url) as resp:
                     data = await resp.text(errors="replace")
-            soup = BeautifulSoup(data, "html.parser")
+            soup = BeautifulSoup(data, "lxml")
             tables = soup.find_all("table")
             trs = tables[1].find_all("tr")
             for tr in trs:
@@ -399,7 +399,7 @@ class StockCrawl:
         async with self.session as session:
             async with session.get(TWSE_NEWS) as resp:
                 text = await resp.text(errors="replace")
-        soup = BeautifulSoup(text, "html.parser")
+        soup = BeautifulSoup(text, "lxml")
 
         result: List[News] = []
         for tr in soup.find_all("tr", {"class": ["even", "odd"]}):
