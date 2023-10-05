@@ -14,8 +14,8 @@ from FinMind.data import DataLoader as FinMindDataLoader
 from tortoise import Tortoise
 from tortoise.exceptions import IntegrityError
 
-from .api_urls import *
 from .constants import RANDOM_HEADERS, RANDOM_USER_AGENTS
+from .endpoints import *
 from .enums import RecentDay
 from .models import BuySell, HistoryTrade, MainForce, News, PunishStock, Stock
 from .utils import (
