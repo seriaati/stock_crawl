@@ -105,6 +105,13 @@ class StockCrawl:
         self.today = day_trades[-1].date
         logging.debug(f"Today's date is: {self.today}")
 
+    async def __aenter__(self) -> "StockCrawl":
+        await self.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        await self.close()
+
     async def start(self) -> None:
         if self.use_cache:
             self._load_cache()
