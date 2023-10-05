@@ -161,7 +161,7 @@ class StockCrawl:
 
     @cache_decorator
     async def fetch_main_forces(
-        self, id: str, day: RecentDay = RecentDay.ONE
+        self, id: str, day: RecentDay = RecentDay.ONE, retry: int = 0
     ) -> List[MainForce]:
         """
         從富邦 API 取得單個上市上櫃公司的主力進出明細
@@ -179,10 +179,17 @@ class StockCrawl:
         else:
             url = FUBON_MAIN_FORCE.format(id=id, day=day.value)
         async with self.session as session:
-            async with session.get(url) as resp:
-                data = await resp.text(errors="replace")
+            try:
+                async with session.get(url) as resp:
+                    data = await resp.text(errors="replace")
+            except aiohttp.ClientConnectionError as e:
+                if retry > 5:
+                    raise e
 
-        soup = BeautifulSoup(data, "html.parser")
+                await asyncio.sleep(5 * (retry + 1))
+                return await self.fetch_main_forces(id, day, retry + 1)
+
+        soup = BeautifulSoup(data, "lxml")
         rows = soup.find_all("tr")
         main_forces: List[MainForce] = []
 
