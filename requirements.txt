@@ -1,3 +1,4 @@
+aiohttp
 tortoise-orm
 pydantic
 beautifulsoup4
