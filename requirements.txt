@@ -3,3 +3,4 @@ tortoise-orm
 pydantic
 beautifulsoup4
 FinMind
+lxml
