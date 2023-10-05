@@ -73,7 +73,8 @@ class StockCrawl:
     def session(self) -> aiohttp.ClientSession:
         return aiohttp.ClientSession(
             headers=self._generate_random_header(),
-            connector=aiohttp.TCPConnector(verify_ssl=False),
+            connector=aiohttp.TCPConnector(ssl=False),
+            trust_env=True,
         )
 
     def _load_cache(self) -> None:
