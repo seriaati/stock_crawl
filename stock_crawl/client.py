@@ -1,45 +1,33 @@
 import asyncio
-import copy
 import datetime
 import logging
 import os
 import pickle
-import random
 from collections import defaultdict
-from typing import Any, DefaultDict, Dict, List
+from typing import Any, DefaultDict, Dict, List, Optional
 
 import aiohttp
 from bs4 import BeautifulSoup
-from FinMind.data import DataLoader as FinMindDataLoader
-from tortoise import Tortoise
-from tortoise.backends.base.client import BaseDBAsyncClient
-from tortoise.connection import connections
+from fake_useragent import UserAgent
 
-from .constants import RANDOM_HEADERS, RANDOM_USER_AGENTS
 from .endpoints import *
 from .enums import RecentDay
 from .models import BuySell, HistoryTrade, MainForce, News, PunishStock, Stock
-from .utils import (
-    bulk_update_or_create,
-    get_today,
-    get_trade_days,
-    roc_to_western_date,
-    update_or_create,
-)
+from .utils import get_today, roc_to_western_date
 
 CACHE_DIR = "cache.pkl"
+ua = UserAgent()
 
 
 def cache_decorator(func):
     async def wrapper(self: "StockCrawl", *args, **kwargs):
-        if not hasattr(self, "today"):
-            return await func(self, *args, **kwargs)
-        key = f"{func.__name__}_{args}_{kwargs}_{self.today}"
-        if key in self.cache:
+        key = f"{func.__name__}_{args}_{kwargs}_{get_today()}"
+        if key in self._cache:
             logging.debug(f"Using cache for {key}")
-            return self.cache[key]
+            return self._cache[key]
+
         result = await func(self, *args, **kwargs)
-        self.cache[key] = result
+        self._cache[key] = result
         logging.debug(f"Cached {key}")
         self.save_cache()
         return result
@@ -53,137 +41,80 @@ class StockCrawl:
         *,
         use_cache: bool = True,
     ) -> None:
-        self.finmind = FinMindDataLoader()
-        """FinMind API"""
         self.use_cache = use_cache
-        """是否使用快取"""
-        self.cache: Dict[str, Any] = {}
-        """快取"""
-        self.today: datetime.date
-        """今天日期"""
-        self.conn: BaseDBAsyncClient
-        """資料庫"""
+        self._cache: Dict[str, Any] = {}
 
-    @staticmethod
-    def _generate_random_header() -> Dict[str, str]:
-        browser = random.choice(list(RANDOM_USER_AGENTS.keys()))
-        user_agent = random.choice(RANDOM_USER_AGENTS[browser])
-        header = copy.copy(random.choice(RANDOM_HEADERS))
-        header["User-Agent"] = user_agent
-        return header
+        if self.use_cache:
+            self._load_cache()
+        self._delete_old_cache()
 
     @property
     def session(self) -> aiohttp.ClientSession:
         return aiohttp.ClientSession(
-            headers=self._generate_random_header(),
+            headers={"User-Agent": ua.random},
             connector=aiohttp.TCPConnector(ssl=False),
             trust_env=True,
         )
 
     def _load_cache(self) -> None:
+        """
+        Load cache from file if it exists, otherwise create an empty cache file.
+
+        Returns:
+            None
+        """
         if not os.path.exists(CACHE_DIR):
             with open(CACHE_DIR, "wb") as f:
                 pickle.dump({}, f)
         with open(CACHE_DIR, "rb") as f:
-            self.cache = pickle.load(f)
-
-    def save_cache(self) -> None:
-        with open(CACHE_DIR, "wb") as f:
-            pickle.dump(self.cache, f)
+            self._cache = pickle.load(f)
 
     def _delete_old_cache(self) -> None:
+        """
+        Deletes cache entries that are older than three days.
+
+        Returns:
+            None
+        """
         recent_three_days = [
-            str(self.today - datetime.timedelta(days=i)) for i in range(3)
+            str(get_today() - datetime.timedelta(days=i)) for i in range(3)
         ]
-        for key in list(self.cache.keys()):
+        for key in list(self._cache.keys()):
             if not any((day in key for day in recent_three_days)):
-                del self.cache[key]
-        logging.debug(f"Cache size: {len(self.cache)}")
+                del self._cache[key]
+        logging.debug(f"Cache size: {len(self._cache)}")
         self.save_cache()
 
-    async def set_today(self) -> None:
-        today = get_today()
-        day_trades = await self.fetch_history_trades(
-            "2330", today - datetime.timedelta(days=5), today, use_db=False
-        )
-        self.today = day_trades[-1].date
-        logging.debug(f"Today's date is: {self.today}")
-
-    async def __aenter__(self) -> "StockCrawl":
-        await self.start()
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb) -> None:
-        await self.close()
-
-    async def start(self) -> None:
-        if self.use_cache:
-            self._load_cache()
-
-        await Tortoise.init(
-            config={
-                "connections": {
-                    "stock_crawl": "sqlite://stock_crawl.sqlite3",
-                },
-                "apps": {
-                    "stock_crawl": {
-                        "models": ["stock_crawl.models.database"],
-                        "default_connection": "stock_crawl",
-                    }
-                },
-            },
-        )
-        await Tortoise.generate_schemas()
-        self.conn = connections.get("stock_crawl")
-
-        await self.set_today()
-        self._delete_old_cache()
-
-    async def close(self) -> None:
-        await self.conn.close()
-
-    async def fetch_stock_ids(self) -> List[str]:
+    def save_cache(self) -> None:
         """
-        取得上市公司代號與上櫃公司代號
+        Saves the cache to a file using pickle.
+
+        Returns:
+        None
         """
-        stock_ids: List[str] = []
-        async with self.session as session:
-            async with session.get(TWSE_IDS) as resp:  # 取得所有上市公司代號
-                data: List[Dict[str, str]] = await resp.json()
-                for d in data:
-                    if d["公司代號"].isdigit():
-                        stock_id = d["公司代號"]
-                        stock_ids.append(stock_id)
-                        await update_or_create(
-                            Stock(id=stock_id, name=d["公司簡稱"]), self.conn
-                        )
-
-            async with session.get(TPEX_IDS) as resp:  # 取得所有上櫃公司代號
-                data: List[Dict[str, str]] = await resp.json()
-                for d in data:
-                    if d["SecuritiesCompanyCode"].isdigit():
-                        stock_id = d["SecuritiesCompanyCode"]
-                        stock_ids.append(stock_id)
-                        await update_or_create(
-                            Stock(id=stock_id, name=d["CompanyName"]), self.conn
-                        )
-
-        return stock_ids
+        with open(CACHE_DIR, "wb") as f:
+            pickle.dump(self._cache, f)
 
     @cache_decorator
-    async def get_stock_name(self, id: str) -> str:
+    async def fetch_stocks(self) -> List[Stock]:
         """
-        取得股票名稱
+        從 Stock API 取得上市上櫃公司的股票代號與名稱
+
+        回傳:
+            List[Stock]: 上市上櫃公司的物件
         """
-        stock = await Stock.get_or_none(id=id, using_db=self.conn)
-        if stock is None:
-            await self.fetch_stock_ids()
-            stock = await Stock.get(id=id, using_db=self.conn)
-        return stock.name
+        async with self.session.get(STOCK_API_STOCKS) as resp:
+            data = await resp.json()
+        return [Stock(**d) for d in data]
 
     @cache_decorator
     async def fetch_main_forces(
-        self, id: str, day: RecentDay = RecentDay.ONE, retry: int = 0
+        self,
+        id: str,
+        date: datetime.date,
+        *,
+        recent_day: RecentDay = RecentDay.ONE,
+        retry: int = 0,
     ) -> List[MainForce]:
         """
         從富邦 API 取得單個上市上櫃公司的主力進出明細
@@ -194,12 +125,10 @@ class StockCrawl:
         回傳:
             List[MainForce]: 主力進出明細
         """
-        if day is RecentDay.ONE:
-            url = FUBON_MAIN_FORCE_DATE.format(
-                id=id, date=self.today.strftime("%Y-%m-%d")
-            )
+        if recent_day is RecentDay.ONE:
+            url = FUBON_MAIN_FORCE_DATE.format(id=id, date=date.strftime("%Y-%m-%d"))
         else:
-            url = FUBON_MAIN_FORCE.format(id=id, day=day.value)
+            url = FUBON_MAIN_FORCE.format(id=id, day=recent_day.value)
         async with self.session as session:
             try:
                 async with session.get(url) as resp:
@@ -209,7 +138,9 @@ class StockCrawl:
                     raise e
 
                 await asyncio.sleep(5 * (retry + 1))
-                return await self.fetch_main_forces(id, day, retry + 1)
+                return await self.fetch_main_forces(
+                    id, date, recent_day=recent_day, retry=retry + 1
+                )
 
         soup = BeautifulSoup(data, "lxml")
         rows = soup.find_all("tr")
@@ -281,11 +212,12 @@ class StockCrawl:
         }
         return {**twse_capital, **tpex_capital}
 
+    @cache_decorator
     async def fetch_history_trades(
-        self, id: str, start: datetime.date, end: datetime.date, *, use_db: bool = True
+        self, id: str, *, limit: Optional[int] = None
     ) -> List[HistoryTrade]:
         """
-        從 FinMind API 取得上市上櫃公司的歷史交易資訊
+        從 Stock API 取得上市上櫃公司的歷史交易資訊
 
         參數:
             id: 上市上櫃公司代號
@@ -295,39 +227,11 @@ class StockCrawl:
         回傳:
             List[HistoryTrade]: 歷史交易資訊
         """
-        if use_db:
-            logging.debug("Getting trade data from db")
-            # obtain histroy trades from db that is between start and end date and has the id id
-            db_trades = (
-                await HistoryTrade.filter(date__gte=start, date__lte=end, stock_id=id)
-                .using_db(self.conn)
-                .all()
-            )
-
-            # check if the trade data is complete
-            if len(db_trades) == len(await get_trade_days()):
-                logging.debug(f"Got {len(db_trades)} trade data from db")
-                return db_trades
-
-        # not complete, fetch from FinMind
-        logging.debug("Fetching trade data from FinMind")
-        trades = await asyncio.to_thread(self._fetch_day_trades, id, start, end)
-        await bulk_update_or_create(trades, self.conn)
-
-        logging.debug(f"Saved {len(trades)} trade data to db")
-        return trades
-
-    def _fetch_day_trades(
-        self, id: str, start: datetime.date, end: datetime.date
-    ) -> List[HistoryTrade]:
-        df = self.finmind.taiwan_stock_daily(
-            id, start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
-        )
-        stock_prices: List[HistoryTrade] = []
-        for _, row in df.iterrows():
-            stock_price = HistoryTrade.parse_from_series(row)
-            stock_prices.append(stock_price)
-        return stock_prices
+        async with self.session.get(
+            STOCK_API_HISTORY_TRADES.format(id=id),
+            params={"limit": limit} if limit else None,
+        ) as resp:
+            return [HistoryTrade(**d) for d in await resp.json()]
 
     @cache_decorator
     async def fetch_dividend_days(self) -> Dict[str, datetime.date]:
@@ -427,6 +331,12 @@ class StockCrawl:
         return twse_punish_stocks + tpex_punish_stocks
 
     async def fetch_news(self) -> List[News]:
+        """
+        從公開資訊觀測站取得最新的新聞
+
+        回傳:
+            List[News]: 新聞
+        """
         async with self.session as session:
             async with session.get(TWSE_NEWS) as resp:
                 text = await resp.text(errors="replace")
@@ -438,3 +348,15 @@ class StockCrawl:
             result.append(News.parse_from_tds(tds))
 
         return result
+
+    async def fetch_most_recent_trade_day(self) -> datetime.date:
+        """
+        從 Stock API 取得最近的交易日
+
+        回傳:
+            datetime.date: 最近的交易日
+        """
+        async with self.session.get(STOCK_API_HISTORY_TRADES.format(id="2330")) as resp:
+            data = await resp.json()
+
+        return datetime.datetime.strptime(data[-1]["date"], "%Y-%m-%d").date()

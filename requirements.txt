@@ -2,5 +2,5 @@ aiohttp
 tortoise-orm
 pydantic
 beautifulsoup4
-FinMind
 lxml
+fake-useragent

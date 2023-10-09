@@ -4,11 +4,22 @@ from typing import List
 from bs4 import Tag
 from pydantic import BaseModel, field_validator
 
-from ..utils import roc_to_western_date, str_to_float
+from .utils import roc_to_western_date, str_to_float
 
 
 class MainForce(BaseModel):
-    """主力"""
+    """
+    主力
+
+    屬性:
+        name: 卷商名稱
+        buy: 買進
+        sell: 賣出
+        overbought: 買超/賣超
+        proportion: 佔成交比重
+        url: 主力進出明細網址
+        is_buy_force: 是否為買超主力, False 則為賣超主力
+    """
 
     name: str
     """卷商名稱"""
@@ -25,9 +36,6 @@ class MainForce(BaseModel):
     is_buy_force: bool
     """是否為買超主力, False 則為賣超主力"""
 
-    def __str__(self) -> str:
-        return f"{self.name} 買進: {self.buy} 賣出: {self.sell} 買超: {self.overbought} 佔成交比重: {self.proportion}%"
-
     @classmethod
     def parse(cls, cells: List[Tag], is_buy_force: bool) -> "MainForce":
         """解析 HTML 的 <td> 標籤"""
@@ -43,6 +51,17 @@ class MainForce(BaseModel):
 
 
 class BuySell(BaseModel):
+    """
+    進出明細
+
+    屬性:
+        date: 日期
+        buy: 買進(張)
+        sell: 賣出(張)
+        total: 買賣總額(張)
+        overbought: 買賣超(張)
+    """
+
     date: datetime.date
     """日期"""
     buy: int
@@ -54,9 +73,6 @@ class BuySell(BaseModel):
     overbought: int
     """買賣超(張)"""
 
-    def __str__(self) -> str:
-        return f"{self.date} 買進: {self.buy} 賣出: {self.sell} 買賣總額: {self.total} 買賣超: {self.overbought}"
-
     @classmethod
     def parse(cls, cells: List[Tag]) -> "BuySell":
         """解析 HTML 的 <td> 標籤"""
@@ -67,59 +83,6 @@ class BuySell(BaseModel):
             total=int(cells[3].text.replace(",", "")),
             overbought=int(cells[4].text.replace(",", "")),
         )
-
-
-class RecommendStock(BaseModel):
-    """推薦股票"""
-
-    id: str
-    """股票代號"""
-    name: str
-    """股票名稱"""
-    closing_price: float
-    """收盤價"""
-    strongest_buy: str
-    """最強買進主力"""
-    date: datetime.date
-    """日期"""
-
-
-class ForceSubscribe(BaseModel):
-    """訂閱主力買賣情況"""
-
-    force_name: str
-    """卷商名稱"""
-    force_url: str
-    """主力進出明細網址"""
-    stock_name: str
-    """股票名稱"""
-    stock_id: str
-    """股票代號"""
-
-
-class TradeLog(BaseModel):
-    """交易紀錄"""
-
-    stock_id: str
-    """股票代號"""
-    stock_name: str
-    """股票名稱"""
-    price: float
-    """價格"""
-    quantity: int
-    """張數"""
-    is_buy: bool
-    """是否為買進, false 則為賣出"""
-    date: datetime.date
-    """日期"""
-
-    @field_validator("is_buy", mode="before")
-    def _convert_is_buy(cls, v: int) -> bool:
-        return bool(v)
-
-    @field_validator("date", mode="before")
-    def _convert_date(cls, v: str) -> datetime.date:
-        return datetime.datetime.strptime(v, "%Y-%m-%d").date()
 
 
 class PunishStock(BaseModel):
@@ -145,6 +108,16 @@ class PunishStock(BaseModel):
 
 
 class News(BaseModel):
+    """
+    新聞
+
+    屬性:
+        stock_id: 股票代號
+        stock_name: 股票名稱
+        title: 新聞標題
+        date_time: 新聞發布時間
+    """
+
     stock_id: str
     """股票代號"""
     stock_name: str
@@ -168,3 +141,58 @@ class News(BaseModel):
                 western_date, datetime.datetime.strptime(time_, "%H:%M:%S").time()
             ),
         )
+
+
+class HistoryTrade(BaseModel):
+    """
+    歷史交易資料
+
+    屬性:
+        id: 交易序號
+        date: 日期
+        stock_id: 股票代號
+        total_volume: 總成交量
+        total_value: 總成交值
+        open_price: 開盤價
+        high_price: 最高價
+        low_price: 最低價
+        close_price: 收盤價
+    """
+
+    id: int
+    """交易序號"""
+    date: datetime.date
+    """日期"""
+    stock_id: str
+    """股票代號"""
+    total_volume: int
+    """總成交量"""
+    total_value: int
+    """總成交值"""
+    open_price: int
+    """開盤價"""
+    high_price: int
+    """最高價"""
+    low_price: int
+    """最低價"""
+    close_price: int
+    """收盤價"""
+
+    @field_validator("date", mode="before")
+    def _convert_date(cls, v: str) -> datetime.date:
+        return datetime.datetime.strptime(v, "%Y-%m-%d").date()
+
+
+class Stock(BaseModel):
+    """
+    股票
+
+    屬性:
+        id: 股票代號
+        name: 股票名稱
+    """
+
+    id: str
+    """股票代號"""
+    name: str
+    """股票名稱"""
