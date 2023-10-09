@@ -356,7 +356,5 @@ class StockCrawl:
         回傳:
             datetime.date: 最近的交易日
         """
-        async with self.session.get(STOCK_API_HISTORY_TRADES.format(id="2330")) as resp:
-            data = await resp.json()
-
-        return datetime.datetime.strptime(data[-1]["date"], "%Y-%m-%d").date()
+        history_trades = await self.fetch_history_trades("2330", limit=1)
+        return history_trades[0].date
