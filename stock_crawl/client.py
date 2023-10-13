@@ -108,6 +108,20 @@ class StockCrawl:
         return [Stock(**d) for d in data]
 
     @cache_decorator
+    async def fetch_stock(self, stock_id: str) -> Stock:
+        """
+        從 Stock API 取得單個上市上櫃公司的股票代號與名稱
+
+        參數:
+            stock_id: 上市上櫃公司代號
+
+        回傳:
+            Stock: 上市上櫃公司的物件
+        """
+        async with self.session.get(f"{STOCK_API_STOCKS}/{stock_id}") as resp:
+            data = await resp.json()
+        return Stock(**data)
+    @cache_decorator
     async def fetch_main_forces(
         self,
         id: str,

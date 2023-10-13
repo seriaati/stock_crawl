@@ -74,3 +74,10 @@ async def test_fetch_most_recent_trade_day():
     client = stock_crawl.StockCrawl(use_cache=False)
     most_recent_trade_day = await client.fetch_most_recent_trade_day()
     assert isinstance(most_recent_trade_day, datetime.date)
+
+
+@pytest.mark.asyncio
+async def test_fetch_stock():
+    client = stock_crawl.StockCrawl(use_cache=False)
+    stock = await client.fetch_stock("2330")
+    assert stock is not None
