@@ -121,6 +121,23 @@ class StockCrawl:
         async with self.session.get(f"{STOCK_API_STOCKS}/{stock_id}") as resp:
             data = await resp.json()
         return Stock(**data)
+
+    @cache_decorator
+    async def fetch_stock_ids(self, only_four_digits: bool = False) -> List[str]:
+        """
+        從 Stock API 取得上市上櫃公司的股票代號
+
+        參數:
+            only_four_digits: 是否只取四位數的股票代號
+
+        回傳:
+            List[str]: 上市上櫃公司的股票代號
+        """
+        stocks = await self.fetch_stocks()
+        return [
+            stock.id for stock in stocks if not only_four_digits or len(stock.id) == 4
+        ]
+
     @cache_decorator
     async def fetch_main_forces(
         self,

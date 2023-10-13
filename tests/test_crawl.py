@@ -81,3 +81,17 @@ async def test_fetch_stock():
     client = stock_crawl.StockCrawl(use_cache=False)
     stock = await client.fetch_stock("2330")
     assert stock is not None
+
+
+@pytest.mark.asyncio
+async def test_fetch_stock_ids():
+    client = stock_crawl.StockCrawl(use_cache=False)
+    stock_ids = await client.fetch_stock_ids()
+    assert len(stock_ids) > 0
+
+
+@pytest.mark.asyncio
+async def test_fetch_stock_ids_only_four_digits():
+    client = stock_crawl.StockCrawl(use_cache=False)
+    stock_ids = await client.fetch_stock_ids(only_four_digits=True)
+    assert all(len(stock_id) == 4 for stock_id in stock_ids)
