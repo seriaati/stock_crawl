@@ -108,3 +108,11 @@ async def test_fetch_stock_ids_only_four_digits():
     stock_ids = await client.fetch_stock_ids(only_four_digits=True)
     assert all(len(stock_id) == 4 for stock_id in stock_ids)
     await client.close()
+
+
+@pytest.mark.asyncio
+async def test_client_reuse():
+    client = stock_crawl.StockCrawl()
+    await client.fetch_history_trades("2330", limit=1)
+    await client.fetch_history_trades("2330", limit=1)
+    await client.fetch_most_recent_trade_day()
