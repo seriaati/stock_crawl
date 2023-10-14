@@ -4,3 +4,4 @@ pydantic
 beautifulsoup4
 lxml
 fake-useragent
+cachetools

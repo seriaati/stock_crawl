@@ -1,96 +1,27 @@
 import asyncio
 import datetime
-import logging
-import os
-import pickle
 from collections import defaultdict
-from typing import Any, DefaultDict, Dict, List, Optional
+from typing import DefaultDict, Dict, List, Optional
 
 import aiohttp
 from bs4 import BeautifulSoup
+from cachetools.func import ttl_cache
 from fake_useragent import UserAgent
 
 from .endpoints import *
 from .enums import RecentDay
 from .models import BuySell, HistoryTrade, MainForce, News, PunishStock, Stock
-from .utils import get_today, roc_to_western_date
+from .utils import roc_to_western_date
 
-CACHE_DIR = "cache.pkl"
 ua = UserAgent()
 
 
-def cache_decorator(func):
-    async def wrapper(self: "StockCrawl", *args, **kwargs):
-        key = f"{func.__name__}_{args}_{kwargs}_{get_today()}"
-        if key in self._cache:
-            logging.debug(f"Using cache for {key}")
-            return self._cache[key]
-
-        result = await func(self, *args, **kwargs)
-        self._cache[key] = result
-        logging.debug(f"Cached {key}")
-        self.save_cache()
-        return result
-
-    return wrapper
-
-
 class StockCrawl:
-    def __init__(
-        self,
-        *,
-        use_cache: bool = True,
-    ) -> None:
-        self.use_cache = use_cache
-        self._cache: Dict[str, Any] = {}
-
-        if self.use_cache:
-            self._load_cache()
-        self._delete_old_cache()
-
+    def __init__(self) -> None:
         self.session = aiohttp.ClientSession(
             connector=aiohttp.TCPConnector(ssl=False),
             trust_env=True,
         )
-
-    def _load_cache(self) -> None:
-        """
-        Load cache from file if it exists, otherwise create an empty cache file.
-
-        Returns:
-            None
-        """
-        if not os.path.exists(CACHE_DIR):
-            with open(CACHE_DIR, "wb") as f:
-                pickle.dump({}, f)
-        with open(CACHE_DIR, "rb") as f:
-            self._cache = pickle.load(f)
-
-    def _delete_old_cache(self) -> None:
-        """
-        Deletes cache entries that are older than three days.
-
-        Returns:
-            None
-        """
-        recent_three_days = [
-            str(get_today() - datetime.timedelta(days=i)) for i in range(3)
-        ]
-        for key in list(self._cache.keys()):
-            if not any((day in key for day in recent_three_days)):
-                del self._cache[key]
-        logging.debug(f"Cache size: {len(self._cache)}")
-        self.save_cache()
-
-    def save_cache(self) -> None:
-        """
-        Saves the cache to a file using pickle.
-
-        Returns:
-        None
-        """
-        with open(CACHE_DIR, "wb") as f:
-            pickle.dump(self._cache, f)
 
     async def close(self) -> None:
         """
@@ -101,7 +32,6 @@ class StockCrawl:
         """
         await self.session.close()
 
-    @cache_decorator
     async def fetch_stocks(self) -> List[Stock]:
         """
         從 Stock API 取得上市上櫃公司的股票代號與名稱
@@ -115,7 +45,7 @@ class StockCrawl:
             data = await resp.json()
         return [Stock(**d) for d in data]
 
-    @cache_decorator
+    @ttl_cache(ttl=60 * 60 * 24)
     async def fetch_stock(self, stock_id: str) -> Stock:
         """
         從 Stock API 取得單個上市上櫃公司的股票代號與名稱
@@ -132,7 +62,7 @@ class StockCrawl:
             data = await resp.json()
         return Stock(**data)
 
-    @cache_decorator
+    @ttl_cache(ttl=60 * 60 * 24)
     async def fetch_stock_ids(self, only_four_digits: bool = False) -> List[str]:
         """
         從 Stock API 取得上市上櫃公司的股票代號
@@ -148,7 +78,7 @@ class StockCrawl:
             stock.id for stock in stocks if not only_four_digits or len(stock.id) == 4
         ]
 
-    @cache_decorator
+    @ttl_cache(ttl=60 * 60 * 24)
     async def fetch_main_forces(
         self,
         id: str,
@@ -203,7 +133,7 @@ class StockCrawl:
 
         return main_forces
 
-    @cache_decorator
+    @ttl_cache(ttl=60 * 60 * 24)
     async def fetch_force_buy_sells(self, url: str) -> List[BuySell]:
         """
         從富邦 API 取得主力對於單個上市上櫃公司的進出明細表
@@ -231,7 +161,7 @@ class StockCrawl:
 
         return buy_sells
 
-    @cache_decorator
+    @ttl_cache(ttl=60 * 60 * 24)
     async def fetch_company_capitals(self) -> Dict[str, int]:
         """
         從 TWSE API 與 TPEX API 取得上市公司與上櫃公司的實收資本額
@@ -255,7 +185,7 @@ class StockCrawl:
         }
         return {**twse_capital, **tpex_capital}
 
-    @cache_decorator
+    @ttl_cache(ttl=60 * 60 * 24)
     async def fetch_history_trades(
         self, id: str, *, limit: Optional[int] = None
     ) -> List[HistoryTrade]:
@@ -277,7 +207,7 @@ class StockCrawl:
         ) as resp:
             return [HistoryTrade(**d) for d in await resp.json()]
 
-    @cache_decorator
+    @ttl_cache(ttl=60 * 60 * 24)
     async def fetch_dividend_days(self) -> Dict[str, datetime.date]:
         """
         從 TWSE API 與 TPEX API 取得上市公司與上櫃公司除權息日期
@@ -305,7 +235,7 @@ class StockCrawl:
         }
         return {**twse_dividend_days, **tpex_dividend_days}
 
-    @cache_decorator
+    @ttl_cache(ttl=60 * 60 * 24)
     async def fetch_stock_cat_map(self) -> Dict[str, List[str]]:
         """
         從 MoneyDJ API 取得股票分類
@@ -346,7 +276,7 @@ class StockCrawl:
 
         return result
 
-    @cache_decorator
+    @ttl_cache(ttl=60 * 60 * 24)
     async def fetch_punish_stocks(self) -> List[PunishStock]:
         """
         從 TWSE API 與 TPEX API 取得上市公司與上櫃公司的處置股票資訊
