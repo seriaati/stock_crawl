@@ -91,6 +91,12 @@ async def test_fetch_stock():
     client = stock_crawl.StockCrawl()
     stock = await client.fetch_stock("2330")
     assert stock is not None
+    stock = await client.fetch_stock("台積電")
+    assert stock is not None
+    stock = await client.fetch_stock("0")
+    assert stock is None
+    stock = await client.fetch_stock("不存在")
+    assert stock is None
     await client.close()
 
 
