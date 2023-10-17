@@ -47,20 +47,33 @@ class StockCrawl:
         return [Stock(**d) for d in data]
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=100))
-    async def fetch_stock(self, stock_id: str) -> Stock:
+    async def fetch_stock(self, stock_id_or_name: str) -> Optional[Stock]:
         """
         從 Stock API 取得單個上市上櫃公司的股票代號與名稱
 
         參數:
-            stock_id: 上市上櫃公司代號
+            stock_id_or_name: 上市上櫃公司代號或名稱
 
         回傳:
             Stock: 上市上櫃公司的物件
         """
-        async with self.session.get(
-            f"{STOCK_API_STOCKS}/{stock_id}", headers={"User-Agent": ua.random}
-        ) as resp:
-            data = await resp.json()
+        if stock_id_or_name.isdigit():
+            async with self.session.get(
+                f"{STOCK_API_STOCKS}/{stock_id_or_name}",
+                headers={"User-Agent": ua.random},
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+        else:
+            async with self.session.get(
+                STOCK_API_STOCKS,
+                headers={"User-Agent": ua.random},
+                params={"name": stock_id_or_name},
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
         return Stock(**data)
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=1))
