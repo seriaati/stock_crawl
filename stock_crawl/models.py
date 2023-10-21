@@ -136,7 +136,7 @@ class News(BaseModel):
         return cls(
             stock_id=tds[0].text,
             stock_name=tds[1].text,
-            title=tds[4].text,
+            title=tds[4].text.replace("\n", ""),
             date_time=datetime.datetime.combine(
                 western_date, datetime.datetime.strptime(time_, "%H:%M:%S").time()
             ),
