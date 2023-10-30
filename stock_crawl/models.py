@@ -169,13 +169,13 @@ class HistoryTrade(BaseModel):
     """總成交量"""
     total_value: int
     """總成交值"""
-    open_price: int
+    open_price: float
     """開盤價"""
-    high_price: int
+    high_price: float
     """最高價"""
-    low_price: int
+    low_price: float
     """最低價"""
-    close_price: int
+    close_price: float
     """收盤價"""
 
     @field_validator("date", mode="before")
