@@ -111,6 +111,8 @@ class PunishStock(BaseModel):
 class News(BaseModel):
     date_of_speech: datetime.date
     """發言日期"""
+    time_of_speech: str
+    """發言時間"""
     stock_id: str
     """股票代號"""
     stock_name: str
@@ -128,6 +130,7 @@ class News(BaseModel):
     def parse_from_twse_data(cls, data: dict[str, str]) -> "News":
         return cls(
             date_of_speech=roc_to_western_date(data["發言日期"]),
+            time_of_speech=data["發言時間"],
             stock_id=data["公司代號"],
             stock_name=data["公司名稱"],
             title=data["主旨"],
@@ -140,6 +143,7 @@ class News(BaseModel):
     def parse_from_tpex_data(cls, data: dict[str, str]) -> "News":
         return cls(
             date_of_speech=roc_to_western_date(data["發言日期"]),
+            time_of_speech=data["發言時間"],
             stock_id=data["SecuritiesCompanyCode"],
             stock_name=data["CompanyName"],
             title=data["主旨"],
