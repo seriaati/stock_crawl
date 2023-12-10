@@ -28,6 +28,8 @@ from .enums import RecentDay
 from .models import BuySell, HistoryTrade, MainForce, News, PunishStock, Stock
 from .utils import roc_to_western_date
 
+__all__ = ("StockCrawl",)
+
 ua = UserAgent()
 
 
