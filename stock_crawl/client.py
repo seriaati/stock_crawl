@@ -40,6 +40,11 @@ class StockCrawl:
             trust_env=True,
         )
 
+    async def __aenter__(self) -> "StockCrawl":
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        await self.close()
     async def close(self) -> None:
         """
         Closes the aiohttp session.
