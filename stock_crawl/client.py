@@ -45,6 +45,22 @@ class StockCrawl:
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
         await self.close()
+
+    async def _request(
+        self,
+        url: str,
+        params: dict[str, Any] | None = None,
+        return_type: Literal["json", "text"] = "json",
+    ) -> Any:
+        async with self.session.get(
+            url, params=params, headers={"User-Agent": ua.random}
+        ) as resp:
+            if resp.status != 200:
+                return None
+            if return_type == "json":
+                return await resp.json()
+            return await resp.text(errors="replace")
+
     async def close(self) -> None:
         """
         Closes the aiohttp session.
@@ -61,10 +77,7 @@ class StockCrawl:
         回傳:
             List[Stock]: 上市上櫃公司的物件
         """
-        async with self.session.get(
-            STOCK_API_STOCKS, headers={"User-Agent": ua.random}
-        ) as resp:
-            data = await resp.json()
+        data = await self._request(STOCK_API_STOCKS)
         return [Stock(**d) for d in data]
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=100))
@@ -79,23 +92,14 @@ class StockCrawl:
             Stock: 上市上櫃公司的物件
         """
         if stock_id_or_name.isdigit():
-            async with self.session.get(
-                f"{STOCK_API_STOCKS}/{stock_id_or_name}",
-                headers={"User-Agent": ua.random},
-            ) as resp:
-                if resp.status != 200:
-                    return None
-                data = await resp.json()
+            data = await self._request(f"{STOCK_API_STOCKS}/{stock_id_or_name}")
         else:
-            async with self.session.get(
-                STOCK_API_STOCKS,
-                headers={"User-Agent": ua.random},
-                params={"name": stock_id_or_name},
-            ) as resp:
-                if resp.status != 200:
-                    return None
-                data = await resp.json()
-        return Stock(**data)
+            data = await self._request(
+                STOCK_API_STOCKS, params={"name": stock_id_or_name}
+            )
+        if data is not None:
+            return Stock(**data)
+        return None
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=1))
     async def fetch_stock_ids(self, only_four_digits: bool = False) -> List[str]:
@@ -137,8 +141,7 @@ class StockCrawl:
             url = FUBON_MAIN_FORCE.format(id=id, day=recent_day.value)
 
         try:
-            async with self.session.get(url, headers={"User-Agent": ua.random}) as resp:
-                data = await resp.text(errors="replace")
+            data = await self._request(url, return_type="text")
         except aiohttp.ClientConnectionError as e:
             if retry > 5:
                 raise e
@@ -179,9 +182,7 @@ class StockCrawl:
         回傳:
             List[BuySell]: 主力進出明細表
         """
-        async with self.session.get(url, headers={"User-Agent": ua.random}) as resp:
-            data = await resp.text(errors="replace")
-
+        data = await self._request(url, return_type="text")
         soup = BeautifulSoup(data, "lxml")
         rows = soup.find_all("tr")
         buy_sells: List[BuySell] = []
@@ -204,15 +205,8 @@ class StockCrawl:
         回傳:
             Dict[str, int]: 公司代號與實收資本額對應表
         """
-        async with self.session.get(
-            TWSE_COMPANY_INFO, headers={"User-Agent": ua.random}
-        ) as resp:
-            twse_data = await resp.json()
-        async with self.session.get(
-            TPEX_COMPANY_INFO, headers={"User-Agent": ua.random}
-        ) as resp:
-            tpex_data = await resp.json()
-
+        twse_data = await self._request(TWSE_COMPANY_INFO)
+        tpex_data = await self._request(TPEX_COMPANY_INFO)
         twse_capital = {d["公司代號"]: int(d["實收資本額"]) for d in twse_data}
         tpex_capital = {
             d["SecuritiesCompanyCode"]: int(d["Paidin.Capital.NTDollars"])
@@ -235,12 +229,11 @@ class StockCrawl:
         回傳:
             List[HistoryTrade]: 歷史交易資訊
         """
-        async with self.session.get(
+        data = await self._request(
             STOCK_API_HISTORY_TRADES.format(id=id),
             params={"limit": limit} if limit else None,
-            headers={"User-Agent": ua.random},
-        ) as resp:
-            return [HistoryTrade(**d) for d in await resp.json()]
+        )
+        return [HistoryTrade(**d) for d in data]
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=1))
     async def fetch_dividend_days(self) -> Dict[str, datetime.date]:
@@ -250,15 +243,8 @@ class StockCrawl:
         回傳:
             Dict[str, datetime.date]: 公司代號與除權息日期對應表
         """
-        async with self.session.get(
-            TWSE_DIVIDEND, headers={"User-Agent": ua.random}
-        ) as resp:
-            twse_data = await resp.json()
-        async with self.session.get(
-            TPEX_DIVIDEND, headers={"User-Agent": ua.random}
-        ) as resp:
-            tpex_data = await resp.json()
-
+        twse_data = await self._request(TWSE_DIVIDEND)
+        tpex_data = await self._request(TPEX_DIVIDEND)
         twse_dividend_days = {
             d["Code"]: roc_to_western_date(d["Date"]) for d in twse_data
         }
@@ -278,11 +264,7 @@ class StockCrawl:
         回傳:
             Dict[str, List[str]]: 股票分類對應表, key 為股票代號, value 為股票分類
         """
-        async with self.session.get(
-            MONEYDJ_STOCK_CATEGORY, headers={"User-Agent": ua.random}
-        ) as resp:
-            data = await resp.text(errors="replace")
-
+        data = await self._request(MONEYDJ_STOCK_CATEGORY, return_type="text")
         soup = BeautifulSoup(data, "lxml")
         tables = soup.find_all("table")
         trs = tables[0].find_all("tr")
@@ -319,15 +301,8 @@ class StockCrawl:
         回傳:
             List[PunishStock]: 處置股票
         """
-        async with self.session.get(
-            TWSE_PUNISH, headers={"User-Agent": ua.random}
-        ) as resp:
-            twse_data = await resp.json()
-        async with self.session.get(
-            TPEX_PUNISH, headers={"User-Agent": ua.random}
-        ) as resp:
-            tpex_data = await resp.json()
-
+        twse_data = await self._request(TWSE_PUNISH)
+        tpex_data = await self._request(TPEX_PUNISH)
         twse_punish_stocks = [
             PunishStock(
                 name=d["Name"],
