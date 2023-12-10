@@ -1,8 +1,0 @@
-aiohttp
-tortoise-orm
-pydantic
-beautifulsoup4
-lxml
-fake-useragent
-cachetools
-asyncache
