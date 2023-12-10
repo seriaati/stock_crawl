@@ -325,24 +325,20 @@ class StockCrawl:
         ]
         return twse_punish_stocks + tpex_punish_stocks
 
-    async def fetch_news(self) -> List[News]:
+    async def fetch_news(self) -> list[News]:
         """
-        從公開資訊觀測站取得最新的新聞
+        取得上市公司與上櫃公司的每日重大訊息
 
         回傳:
-            List[News]: 新聞
+            list[News]: 新聞
         """
-        async with self.session.get(
-            TWSE_NEWS, headers={"User-Agent": ua.random}
-        ) as resp:
-            text = await resp.text(errors="replace")
-        soup = BeautifulSoup(text, "lxml")
+        result: list[News] = []
 
-        result: List[News] = []
-        for tr in soup.find_all("tr", {"class": ["even", "odd"]}):
-            tds = tr.find_all("td")
-            result.append(News.parse_from_tds(tds))
+        twse_news = await self._request(TWSE_NEWS)
+        result.extend([News.parse_from_twse_data(d) for d in twse_news])
 
+        tpex_news = await self._request(TPEX_NEWS)
+        result.extend([News.parse_from_tpex_data(d) for d in tpex_news])
         return result
 
     async def fetch_most_recent_trade_day(self) -> datetime.date:

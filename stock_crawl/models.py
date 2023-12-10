@@ -109,38 +109,43 @@ class PunishStock(BaseModel):
 
 
 class News(BaseModel):
-    """
-    新聞
-
-    屬性:
-        stock_id: 股票代號
-        stock_name: 股票名稱
-        title: 新聞標題
-        date_time: 新聞發布時間
-    """
-
+    date_of_speech: datetime.date
+    """發言日期"""
     stock_id: str
     """股票代號"""
     stock_name: str
     """股票名稱"""
     title: str
-    """新聞標題"""
-    date_time: datetime.datetime
-    """新聞發布時間"""
+    """主旨"""
+    terms_complied: str
+    """符合條款"""
+    date_of_occurrence: datetime.date
+    """事實發生日"""
+    explanation: str
+    """說明"""
 
     @classmethod
-    def parse_from_tds(cls, tds: list[Tag]) -> "News":
-        """解析 HTML 的 <td> 標籤"""
-        roc_date = tds[2].text
-        western_date = roc_to_western_date(roc_date.replace("/", ""))
-        time_ = tds[3].text
+    def parse_from_twse_data(cls, data: dict[str, str]) -> "News":
         return cls(
-            stock_id=tds[0].text,
-            stock_name=tds[1].text,
-            title=tds[4].text.replace("\n", ""),
-            date_time=datetime.datetime.combine(
-                western_date, datetime.datetime.strptime(time_, "%H:%M:%S").time()
-            ),
+            date_of_speech=roc_to_western_date(data["發言日期"]),
+            stock_id=data["公司代號"],
+            stock_name=data["公司名稱"],
+            title=data["主旨"],
+            terms_complied=data["符合條款"],
+            date_of_occurrence=roc_to_western_date(data["事實發生日"]),
+            explanation=data["說明"],
+        )
+
+    @classmethod
+    def parse_from_tpex_data(cls, data: dict[str, str]) -> "News":
+        return cls(
+            date_of_speech=roc_to_western_date(data["發言日期"]),
+            stock_id=data["SecuritiesCompanyCode"],
+            stock_name=data["CompanyName"],
+            title=data["主旨"],
+            terms_complied=data["符合條款"],
+            date_of_occurrence=roc_to_western_date(data["事實發生日"]),
+            explanation=data["說明"],
         )
 
 
