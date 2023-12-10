@@ -9,7 +9,21 @@ from bs4 import BeautifulSoup
 from cachetools import TTLCache
 from fake_useragent import UserAgent
 
-from .endpoints import *
+from .endpoints import (
+    FUBON_MAIN_FORCE,
+    FUBON_MAIN_FORCE_DATE,
+    MONEYDJ_STOCK_CATEGORY,
+    STOCK_API_HISTORY_TRADES,
+    STOCK_API_STOCKS,
+    TPEX_COMPANY_INFO,
+    TPEX_DIVIDEND,
+    TPEX_NEWS,
+    TPEX_PUNISH,
+    TWSE_COMPANY_INFO,
+    TWSE_DIVIDEND,
+    TWSE_NEWS,
+    TWSE_PUNISH,
+)
 from .enums import RecentDay
 from .models import BuySell, HistoryTrade, MainForce, News, PunishStock, Stock
 from .utils import roc_to_western_date
