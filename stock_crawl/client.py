@@ -1,7 +1,7 @@
 import asyncio
 import datetime
 from collections import defaultdict
-from typing import DefaultDict, Dict, List, Optional
+from typing import Any, Literal
 
 import aiohttp
 from asyncache import cached
@@ -70,18 +70,18 @@ class StockCrawl:
         """
         await self.session.close()
 
-    async def fetch_stocks(self) -> List[Stock]:
+    async def fetch_stocks(self) -> list[Stock]:
         """
         從 Stock API 取得上市上櫃公司的股票代號與名稱
 
         回傳:
-            List[Stock]: 上市上櫃公司的物件
+            list[Stock]: 上市上櫃公司的物件
         """
         data = await self._request(STOCK_API_STOCKS)
         return [Stock(**d) for d in data]
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=100))
-    async def fetch_stock(self, stock_id_or_name: str) -> Optional[Stock]:
+    async def fetch_stock(self, stock_id_or_name: str) -> Stock | None:
         """
         從 Stock API 取得單個上市上櫃公司的股票代號與名稱
 
@@ -89,7 +89,7 @@ class StockCrawl:
             stock_id_or_name: 上市上櫃公司代號或名稱
 
         回傳:
-            Stock: 上市上櫃公司的物件
+            Stock | None: 上市上櫃公司的物件, 如果找不到則回傳 None
         """
         if stock_id_or_name.isdigit():
             data = await self._request(f"{STOCK_API_STOCKS}/{stock_id_or_name}")
@@ -102,7 +102,7 @@ class StockCrawl:
         return None
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=1))
-    async def fetch_stock_ids(self, only_four_digits: bool = False) -> List[str]:
+    async def fetch_stock_ids(self, only_four_digits: bool = False) -> list[str]:
         """
         從 Stock API 取得上市上櫃公司的股票代號
 
@@ -110,7 +110,7 @@ class StockCrawl:
             only_four_digits: 是否只取四位數的股票代號, 預設為 False
 
         回傳:
-            List[str]: 上市上櫃公司的股票代號
+            list[str]: 上市上櫃公司的股票代號
         """
         stocks = await self.fetch_stocks()
         return [
@@ -125,7 +125,7 @@ class StockCrawl:
         *,
         recent_day: RecentDay = RecentDay.ONE,
         retry: int = 0,
-    ) -> List[MainForce]:
+    ) -> list[MainForce]:
         """
         從富邦 API 取得單個上市上櫃公司的主力進出明細
 
@@ -133,7 +133,7 @@ class StockCrawl:
             id: 上市上櫃公司代號
 
         回傳:
-            List[MainForce]: 主力進出明細
+            list[MainForce]: 主力進出明細
         """
         if recent_day is RecentDay.ONE:
             url = FUBON_MAIN_FORCE_DATE.format(id=id, date=date.strftime("%Y-%m-%d"))
@@ -153,7 +153,7 @@ class StockCrawl:
 
         soup = BeautifulSoup(data, "lxml")
         rows = soup.find_all("tr")
-        main_forces: List[MainForce] = []
+        main_forces: list[MainForce] = []
 
         for row in rows:
             cells = row.find_all("td")
@@ -172,7 +172,7 @@ class StockCrawl:
         return main_forces
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=100))
-    async def fetch_force_buy_sells(self, url: str) -> List[BuySell]:
+    async def fetch_force_buy_sells(self, url: str) -> list[BuySell]:
         """
         從富邦 API 取得主力對於單個上市上櫃公司的進出明細表
 
@@ -180,12 +180,12 @@ class StockCrawl:
             url: 主力進出明細網址
 
         回傳:
-            List[BuySell]: 主力進出明細表
+            list[BuySell]: 主力進出明細表
         """
         data = await self._request(url, return_type="text")
         soup = BeautifulSoup(data, "lxml")
         rows = soup.find_all("tr")
-        buy_sells: List[BuySell] = []
+        buy_sells: list[BuySell] = []
 
         for row in rows:
             cells = row.find_all("td")
@@ -198,12 +198,12 @@ class StockCrawl:
         return buy_sells
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=1))
-    async def fetch_company_capitals(self) -> Dict[str, int]:
+    async def fetch_company_capitals(self) -> dict[str, int]:
         """
         從 TWSE API 與 TPEX API 取得上市公司與上櫃公司的實收資本額
 
         回傳:
-            Dict[str, int]: 公司代號與實收資本額對應表
+            dict[str, int]: 公司代號與實收資本額對應表
         """
         twse_data = await self._request(TWSE_COMPANY_INFO)
         tpex_data = await self._request(TPEX_COMPANY_INFO)
@@ -216,8 +216,8 @@ class StockCrawl:
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=100))
     async def fetch_history_trades(
-        self, id: str, *, limit: Optional[int] = None
-    ) -> List[HistoryTrade]:
+        self, id: str, *, limit: int | None = None
+    ) -> list[HistoryTrade]:
         """
         從 Stock API 取得上市上櫃公司的歷史交易資訊
 
@@ -227,7 +227,7 @@ class StockCrawl:
             end: 結束日期
 
         回傳:
-            List[HistoryTrade]: 歷史交易資訊
+            list[HistoryTrade]: 歷史交易資訊
         """
         data = await self._request(
             STOCK_API_HISTORY_TRADES.format(id=id),
@@ -236,12 +236,12 @@ class StockCrawl:
         return [HistoryTrade(**d) for d in data]
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=1))
-    async def fetch_dividend_days(self) -> Dict[str, datetime.date]:
+    async def fetch_dividend_days(self) -> dict[str, datetime.date]:
         """
         從 TWSE API 與 TPEX API 取得上市公司與上櫃公司除權息日期
 
         回傳:
-            Dict[str, datetime.date]: 公司代號與除權息日期對應表
+            dict[str, datetime.date]: 公司代號與除權息日期對應表
         """
         twse_data = await self._request(TWSE_DIVIDEND)
         tpex_data = await self._request(TPEX_DIVIDEND)
@@ -257,12 +257,12 @@ class StockCrawl:
         return {**twse_dividend_days, **tpex_dividend_days}
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=1))
-    async def fetch_stock_cat_map(self) -> Dict[str, List[str]]:
+    async def fetch_stock_cat_map(self) -> dict[str, list[str]]:
         """
         從 MoneyDJ API 取得股票分類
 
         回傳:
-            Dict[str, List[str]]: 股票分類對應表, key 為股票代號, value 為股票分類
+            dict[str, list[str]]: 股票分類對應表, key 為股票代號, value 為股票分類
         """
         data = await self._request(MONEYDJ_STOCK_CATEGORY, return_type="text")
         soup = BeautifulSoup(data, "lxml")
@@ -275,7 +275,7 @@ class StockCrawl:
             if td.text != "\xa0"
         }
 
-        result: DefaultDict[str, List[str]] = defaultdict(list)
+        result: defaultdict[str, list[str]] = defaultdict(list)
         for cat, url in cat_url_map.items():
             async with self.session.get(url, headers={"User-Agent": ua.random}) as resp:
                 data = await resp.text(errors="replace")
@@ -294,12 +294,12 @@ class StockCrawl:
         return result
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=1))
-    async def fetch_punish_stocks(self) -> List[PunishStock]:
+    async def fetch_punish_stocks(self) -> list[PunishStock]:
         """
         從 TWSE API 與 TPEX API 取得上市公司與上櫃公司的處置股票資訊
 
         回傳:
-            List[PunishStock]: 處置股票
+            list[PunishStock]: 處置股票
         """
         twse_data = await self._request(TWSE_PUNISH)
         tpex_data = await self._request(TPEX_PUNISH)
