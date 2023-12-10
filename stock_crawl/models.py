@@ -133,7 +133,7 @@ class News(BaseModel):
             time_of_speech=data["發言時間"],
             stock_id=data["公司代號"],
             stock_name=data["公司名稱"],
-            title=data["主旨"],
+            title=data["主旨 "],
             terms_complied=data["符合條款"],
             date_of_occurrence=roc_to_western_date(data["事實發生日"]),
             explanation=data["說明"],
