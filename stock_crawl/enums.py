@@ -1,5 +1,7 @@
 from enum import IntEnum
 
+__all__ = ("RecentDay",)
+
 
 class RecentDay(IntEnum):
     ONE = 1
