@@ -1,10 +1,11 @@
 import datetime
-from typing import List
 
 from bs4 import Tag
 from pydantic import BaseModel, field_validator
 
 from .utils import roc_to_western_date, str_to_float
+
+__all__ = ("Stock", "HistoryTrade", "News", "PunishStock", "BuySell", "MainForce")
 
 
 class MainForce(BaseModel):
@@ -37,7 +38,7 @@ class MainForce(BaseModel):
     """是否為買超主力, False 則為賣超主力"""
 
     @classmethod
-    def parse(cls, cells: List[Tag], is_buy_force: bool) -> "MainForce":
+    def parse(cls, cells: list[Tag], is_buy_force: bool) -> "MainForce":
         """解析 HTML 的 <td> 標籤"""
         return cls(
             name=cells[0].text,
@@ -74,7 +75,7 @@ class BuySell(BaseModel):
     """買賣超(張)"""
 
     @classmethod
-    def parse(cls, cells: List[Tag]) -> "BuySell":
+    def parse(cls, cells: list[Tag]) -> "BuySell":
         """解析 HTML 的 <td> 標籤"""
         return cls(
             date=datetime.datetime.strptime(cells[0].text, "%Y/%m/%d").date(),
@@ -128,7 +129,7 @@ class News(BaseModel):
     """新聞發布時間"""
 
     @classmethod
-    def parse_from_tds(cls, tds: List[Tag]) -> "News":
+    def parse_from_tds(cls, tds: list[Tag]) -> "News":
         """解析 HTML 的 <td> 標籤"""
         roc_date = tds[2].text
         western_date = roc_to_western_date(roc_date.replace("/", ""))
