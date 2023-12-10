@@ -354,3 +354,16 @@ class StockCrawl:
         """
         history_trades = await self.fetch_history_trades("2330", limit=1)
         return history_trades[0].date
+
+    async def fetch_stock_last_close_price(self, id: str) -> float:
+        """
+        從 Stock API 取得上市上櫃公司的最後收盤價
+
+        參數:
+            id: 上市上櫃公司代號
+
+        回傳:
+            float: 最後收盤價
+        """
+        history_trades = await self.fetch_history_trades(id, limit=1)
+        return history_trades[0].close_price
