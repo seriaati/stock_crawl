@@ -119,37 +119,15 @@ class News(BaseModel):
     """股票名稱"""
     title: str
     """主旨"""
-    terms_complied: str
-    """符合條款"""
-    date_of_occurrence: datetime.date
-    """事實發生日"""
-    explanation: str
-    """說明"""
 
     @classmethod
-    def parse_from_twse_data(cls, data: dict[str, str]) -> "News":
+    def parse_from_cells(cls, cells: list[str]) -> "News":
         return cls(
-            date_of_speech=roc_to_western_date(data["發言日期"]),
-            time_of_speech=data["發言時間"],
-            stock_id=data["公司代號"],
-            stock_name=data["公司名稱"],
-            title=data["主旨 "],
-            terms_complied=data["符合條款"],
-            date_of_occurrence=roc_to_western_date(data["事實發生日"]),
-            explanation=data["說明"],
-        )
-
-    @classmethod
-    def parse_from_tpex_data(cls, data: dict[str, str]) -> "News":
-        return cls(
-            date_of_speech=roc_to_western_date(data["發言日期"]),
-            time_of_speech=data["發言時間"],
-            stock_id=data["SecuritiesCompanyCode"],
-            stock_name=data["CompanyName"],
-            title=data["主旨"],
-            terms_complied=data["符合條款"],
-            date_of_occurrence=roc_to_western_date(data["事實發生日"]),
-            explanation=data["說明"],
+            date_of_speech=roc_to_western_date(cells[2].replace("/", "")),
+            time_of_speech=cells[3],
+            stock_id=cells[0],
+            stock_name=cells[1],
+            title=cells[4],
         )
 
 

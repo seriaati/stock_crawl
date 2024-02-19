@@ -6,6 +6,7 @@ from typing import Any, Literal
 import aiohttp
 from asyncache import cached
 from bs4 import BeautifulSoup
+from bs4.element import Tag
 from cachetools import TTLCache
 from fake_useragent import UserAgent
 
@@ -13,15 +14,14 @@ from .endpoints import (
     FUBON_MAIN_FORCE,
     FUBON_MAIN_FORCE_DATE,
     MONEYDJ_STOCK_CATEGORY,
+    MOPS_NEWS,
     STOCK_API_HISTORY_TRADES,
     STOCK_API_STOCKS,
     TPEX_COMPANY_INFO,
     TPEX_DIVIDEND,
-    TPEX_NEWS,
     TPEX_PUNISH,
     TWSE_COMPANY_INFO,
     TWSE_DIVIDEND,
-    TWSE_NEWS,
     TWSE_PUNISH,
 )
 from .enums import RecentDay
@@ -330,11 +330,19 @@ class StockCrawl:
         """
         result: list[News] = []
 
-        twse_news = await self._request(TWSE_NEWS)
-        result.extend([News.parse_from_twse_data(d) for d in twse_news])
+        data = await self._request(MOPS_NEWS, return_type="text")
+        soup = BeautifulSoup(data, "lxml")
+        table = soup.find(
+            "table", {"class": "hasBorder", "align": "center", "border": "1"}
+        )
+        if not isinstance(table, Tag):
+            return result
+        for row in table.find_all("tr")[1:]:
+            cells = [cell.text.strip() for cell in row.find_all("td")]
+            if len(cells) != 6:
+                continue
+            result.append(News.parse_from_cells(cells))
 
-        tpex_news = await self._request(TPEX_NEWS)
-        result.extend([News.parse_from_tpex_data(d) for d in tpex_news])
         return result
 
     async def fetch_most_recent_trade_day(self) -> datetime.date:
