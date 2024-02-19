@@ -1,6 +1,6 @@
 [project]
 name = "stock-crawl"
-version = "0.1.8"
+version = "1.0.0"
 authors = [
   { name="Seria Ati", email="seria.ati@gmail.com" },
 ]
