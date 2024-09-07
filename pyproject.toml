@@ -1,5 +1,6 @@
 [project]
 requires-python = ">=3.11"
+name = "stock-crawl"
 
 [tool.poetry]
 name = "stock-crawl"
