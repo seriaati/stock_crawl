@@ -209,8 +209,10 @@ class StockCrawl:
             dict[str, int]: 公司代號與實收資本額對應表
         """
         twse_data = await self._request(TWSE_COMPANY_INFO)
-        tpex_data = await self._request(TPEX_COMPANY_INFO)
         twse_capital = {d["公司代號"]: int(d["實收資本額"]) for d in twse_data}
+        return twse_capital
+        
+        tpex_data = await self._request(TPEX_COMPANY_INFO)
         tpex_capital = {
             d["SecuritiesCompanyCode"]: int(d["Paidin.Capital.NTDollars"])
             for d in tpex_data
