@@ -4,6 +4,7 @@ from collections import defaultdict
 from typing import Any, Literal
 
 import aiohttp
+from aiohttp_socks import ProxyConnector
 from asyncache import cached
 from bs4 import BeautifulSoup
 from bs4.element import Tag
@@ -34,9 +35,11 @@ ua = UserAgent()
 
 
 class StockCrawl:
-    def __init__(self) -> None:
+    def __init__(self, *, proxy: bool = False) -> None:
         self.session = aiohttp.ClientSession(
-            connector=aiohttp.TCPConnector(ssl=False),
+            connector=ProxyConnector.from_url("socks5://127.0.0.1:9091", ssl=False)
+            if proxy
+            else aiohttp.TCPConnector(ssl=False),
             trust_env=True,
         )
 
