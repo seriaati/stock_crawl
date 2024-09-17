@@ -4,7 +4,6 @@ from collections import defaultdict
 from typing import Any, Literal
 
 import aiohttp
-from aiohttp_socks import ProxyConnector
 from asyncache import cached
 from bs4 import BeautifulSoup
 from bs4.element import Tag
@@ -35,13 +34,11 @@ ua = UserAgent()
 
 
 class StockCrawl:
-    def __init__(self, *, proxy: bool = False) -> None:
+    def __init__(self, *, proxy: str | None = None) -> None:
         self.session = aiohttp.ClientSession(
-            connector=ProxyConnector.from_url("socks5://127.0.0.1:9091", ssl=False)
-            if proxy
-            else aiohttp.TCPConnector(ssl=False),
-            trust_env=True,
+            connector=aiohttp.TCPConnector(ssl=False), trust_env=True
         )
+        self.proxy = proxy
 
     async def __aenter__(self) -> "StockCrawl":
         return self
@@ -56,7 +53,7 @@ class StockCrawl:
         return_type: Literal["json", "text"] = "json",
     ) -> Any:
         async with self.session.get(
-            url, params=params, headers={"User-Agent": ua.random}
+            url, params=params, headers={"User-Agent": ua.random}, proxy=self.proxy
         ) as resp:
             if resp.status != 200:
                 return None
@@ -210,8 +207,7 @@ class StockCrawl:
         """
         twse_data = await self._request(TWSE_COMPANY_INFO)
         twse_capital = {d["公司代號"]: int(d["實收資本額"]) for d in twse_data}
-        return twse_capital
-        
+
         tpex_data = await self._request(TPEX_COMPANY_INFO)
         tpex_capital = {
             d["SecuritiesCompanyCode"]: int(d["Paidin.Capital.NTDollars"])
