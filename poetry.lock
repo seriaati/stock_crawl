@@ -233,13 +233,13 @@ files = [
 
 [[package]]
 name = "fake-useragent"
-version = "1.5.1"
+version = "2.0.0"
 description = "Up-to-date simple useragent faker with real world database"
 optional = false
 python-versions = "*"
 files = [
-    {file = "fake-useragent-1.5.1.tar.gz", hash = "sha256:6387269f5a2196b5ba7ed8935852f75486845a1c95c50e72460e6a8e762f5c49"},
-    {file = "fake_useragent-1.5.1-py3-none-any.whl", hash = "sha256:57415096557c8a4e23b62a375c21c55af5fd4ba30549227f562d2c4f5b60e3b3"},
+    {file = "fake_useragent-2.0.0-py3-none-any.whl", hash = "sha256:1f1920129bb10369a3adf271c3cb99ba676d5d2746fbbed770da6fd8feff8213"},
+    {file = "fake_useragent-2.0.0.tar.gz", hash = "sha256:8b547af788ed7ab018c5f13f67f229d9a4e034afe11fcbb3fa28a380eda68dae"},
 ]
 
 [[package]]
@@ -1209,4 +1209,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "9978df34d0afa99c63b79220ce5f3f4d449069e8d4d5d0308fc6e6eec2e56b62"
+content-hash = "5f1e5088189ed06c54edc96cfea4c1665635ca4fabbb5900839f40f436cd7119"
