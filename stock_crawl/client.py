@@ -43,7 +43,7 @@ class StockCrawl:
     async def __aenter__(self) -> "StockCrawl":
         return self
 
-    async def __aexit__(self, exc_type, exc, tb) -> None:
+    async def __aexit__(self, exc_type, exc, tb) -> None:  # noqa: ANN001
         await self.close()
 
     async def _request(
@@ -94,15 +94,13 @@ class StockCrawl:
         if stock_id_or_name.isdigit():
             data = await self._request(f"{STOCK_API_STOCKS}/{stock_id_or_name}")
         else:
-            data = await self._request(
-                STOCK_API_STOCKS, params={"name": stock_id_or_name}
-            )
+            data = await self._request(STOCK_API_STOCKS, params={"name": stock_id_or_name})
         if data is not None:
             return Stock(**data)
         return None
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=1))
-    async def fetch_stock_ids(self, only_four_digits: bool = False) -> list[str]:
+    async def fetch_stock_ids(self, *, only_four_digits: bool = False) -> list[str]:
         """
         從 Stock API 取得上市上櫃公司的股票代號
 
@@ -113,14 +111,12 @@ class StockCrawl:
             list[str]: 上市上櫃公司的股票代號
         """
         stocks = await self.fetch_stocks()
-        return [
-            stock.id for stock in stocks if not only_four_digits or len(stock.id) == 4
-        ]
+        return [stock.id for stock in stocks if not only_four_digits or len(stock.id) == 4]
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=100))
     async def fetch_main_forces(
         self,
-        id: str,
+        id_: str,
         date: datetime.date,
         *,
         recent_day: RecentDay = RecentDay.ONE,
@@ -136,20 +132,18 @@ class StockCrawl:
             list[MainForce]: 主力進出明細
         """
         if recent_day is RecentDay.ONE:
-            url = FUBON_MAIN_FORCE_DATE.format(id=id, date=date.strftime("%Y-%m-%d"))
+            url = FUBON_MAIN_FORCE_DATE.format(id=id_, date=date.strftime("%Y-%m-%d"))
         else:
-            url = FUBON_MAIN_FORCE.format(id=id, day=recent_day.value)
+            url = FUBON_MAIN_FORCE.format(id=id_, day=recent_day.value)
 
         try:
             data = await self._request(url, return_type="text")
-        except aiohttp.ClientConnectionError as e:
+        except aiohttp.ClientConnectionError:
             if retry > 5:
-                raise e
+                raise
 
             await asyncio.sleep(5 * (retry + 1))
-            return await self.fetch_main_forces(
-                id, date, recent_day=recent_day, retry=retry + 1
-            )
+            return await self.fetch_main_forces(id_, date, recent_day=recent_day, retry=retry + 1)
 
         soup = BeautifulSoup(data, "lxml")
         rows = soup.find_all("tr")
@@ -210,14 +204,13 @@ class StockCrawl:
 
         tpex_data = await self._request(TPEX_COMPANY_INFO)
         tpex_capital = {
-            d["SecuritiesCompanyCode"]: int(d["Paidin.Capital.NTDollars"])
-            for d in tpex_data
+            d["SecuritiesCompanyCode"]: int(d["Paidin.Capital.NTDollars"]) for d in tpex_data
         }
         return {**twse_capital, **tpex_capital}
 
     @cached(TTLCache(ttl=60 * 60 * 24, maxsize=100))
     async def fetch_history_trades(
-        self, id: str, *, limit: int | None = None
+        self, id_: str, *, limit: int | None = None
     ) -> list[HistoryTrade]:
         """
         從 Stock API 取得上市上櫃公司的歷史交易資訊
@@ -231,7 +224,7 @@ class StockCrawl:
             list[HistoryTrade]: 歷史交易資訊
         """
         data = await self._request(
-            STOCK_API_HISTORY_TRADES.format(id=id),
+            STOCK_API_HISTORY_TRADES.format(id=id_),
             params={"limit": limit} if limit else None,
         )
         return [HistoryTrade(**d) for d in data]
@@ -246,13 +239,9 @@ class StockCrawl:
         """
         twse_data = await self._request(TWSE_DIVIDEND)
         tpex_data = await self._request(TPEX_DIVIDEND)
-        twse_dividend_days = {
-            d["Code"]: roc_to_western_date(d["Date"]) for d in twse_data
-        }
+        twse_dividend_days = {d["Code"]: roc_to_western_date(d["Date"]) for d in twse_data}
         tpex_dividend_days = {
-            d["SecuritiesCompanyCode"]: roc_to_western_date(
-                d["ExRrightsExDividendDate"]
-            )
+            d["SecuritiesCompanyCode"]: roc_to_western_date(d["ExRrightsExDividendDate"])
             for d in tpex_data
         }
         return {**twse_dividend_days, **tpex_dividend_days}
@@ -271,9 +260,7 @@ class StockCrawl:
         trs = tables[0].find_all("tr")
         tds = trs[0].find_all("td", {"width": "25%"})
         cat_url_map = {
-            td.text: f"https://www.moneydj.com{td.a['href']}"
-            for td in tds
-            if td.text != "\xa0"
+            td.text: f"https://www.moneydj.com{td.a['href']}" for td in tds if td.text != "\xa0"
         }
 
         result: defaultdict[str, list[str]] = defaultdict(list)
@@ -333,9 +320,7 @@ class StockCrawl:
 
         data = await self._request(MOPS_NEWS, return_type="text")
         soup = BeautifulSoup(data, "lxml")
-        table = soup.find(
-            "table", {"class": "hasBorder", "align": "center", "border": "1"}
-        )
+        table = soup.find("table", {"class": "hasBorder", "align": "center", "border": "1"})
         if not isinstance(table, Tag):
             return result
         for row in table.find_all("tr")[1:]:
@@ -356,7 +341,7 @@ class StockCrawl:
         history_trades = await self.fetch_history_trades("2330", limit=1)
         return history_trades[0].date
 
-    async def fetch_stock_last_close_price(self, id: str) -> float:
+    async def fetch_stock_last_close_price(self, id_: str) -> float:
         """
         從 Stock API 取得上市上櫃公司的最後收盤價
 
@@ -366,5 +351,5 @@ class StockCrawl:
         回傳:
             float: 最後收盤價
         """
-        history_trades = await self.fetch_history_trades(id, limit=1)
+        history_trades = await self.fetch_history_trades(id_, limit=1)
         return history_trades[0].close_price

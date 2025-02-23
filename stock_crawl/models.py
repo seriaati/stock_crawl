@@ -5,7 +5,7 @@ from pydantic import BaseModel, field_validator
 
 from .utils import roc_to_western_date, str_to_float
 
-__all__ = ("Stock", "HistoryTrade", "News", "PunishStock", "BuySell", "MainForce")
+__all__ = ("BuySell", "HistoryTrade", "MainForce", "News", "PunishStock", "Stock")
 
 
 class MainForce(BaseModel):
@@ -38,7 +38,7 @@ class MainForce(BaseModel):
     """是否為買超主力, False 則為賣超主力"""
 
     @classmethod
-    def parse(cls, cells: list[Tag], is_buy_force: bool) -> "MainForce":
+    def parse(cls, cells: list[Tag], *, is_buy_force: bool) -> "MainForce":
         """解析 HTML 的 <td> 標籤"""
         return cls(
             name=cells[0].text,
@@ -104,6 +104,7 @@ class PunishStock(BaseModel):
     """股票公告遭處置日期"""
 
     @field_validator("date", mode="before")
+    @classmethod
     def _convert_date(cls, v: str) -> datetime.date:
         return roc_to_western_date(v)
 
@@ -167,6 +168,7 @@ class HistoryTrade(BaseModel):
     """收盤價"""
 
     @field_validator("date", mode="before")
+    @classmethod
     def _convert_date(cls, v: str) -> datetime.date:
         return datetime.datetime.strptime(v, "%Y-%m-%d").date()
 
