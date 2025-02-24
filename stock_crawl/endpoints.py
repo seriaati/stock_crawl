@@ -19,7 +19,7 @@ FUBON_MAIN_FORCE_DATE = (
 # 類股資料
 MONEYDJ_STOCK_CATEGORY = "https://www.moneydj.com/Z/ZH/ZHA/ZHA.djhtm"
 # 全體公司即時重大訊息
-MOPS_NEWS = "https://mops.twse.com.tw/mops/web/t05sr01_1"
+MOPS_NEWS = "https://mopsov.twse.com.tw/mops/web/t05sr01_1"
 # 歷史交易資料
 STOCK_API_HISTORY_TRADES = "https://stock-api.seria.moe/history_trades/{id}"
 # 股票基本資料
